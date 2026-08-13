@@ -1,0 +1,15 @@
+import fs from "node:fs";
+import path from "node:path";
+import {createAccount,createClient} from "genlayer-js";
+import {studionet} from "genlayer-js/chains";
+import {TransactionStatus} from "genlayer-js/types";
+const account=createAccount(), client=createClient({chain:studionet,account});
+const code=fs.readFileSync(path.resolve("contracts/SemanticSaga.py"),"utf8");
+const hash=await client.deployContract({account,code,args:[]});
+console.log(`deploymentTransaction=${hash}`);
+const receipt=await client.waitForTransactionReceipt({hash:hash as never,status:TransactionStatus.FINALIZED,interval:5000,retries:180}) as any;
+const address=receipt.data?.contract_address??receipt.txDataDecoded?.contractAddress;
+const executions=receipt.consensus_data?.leader_receipt??[];
+const fatal=executions.filter((x:any)=>x.execution_result!=="SUCCESS"&&x.genvm_result?.error_code!=="CONSENSUS_VALIDATOR_QUORUM_REACHED");
+if(!address||receipt.result_name!=="MAJORITY_AGREE"||fatal.length)throw new Error(JSON.stringify({address,consensus:receipt.result_name,fatal}));
+console.log(JSON.stringify({contractAddress:address,deploymentTransaction:hash,status:receipt.status_name,consensus:receipt.result_name,contractExplorer:`https://explorer-studio.genlayer.com/address/${address}`,transactionExplorer:`https://explorer-studio.genlayer.com/tx/${hash}`},null,2));

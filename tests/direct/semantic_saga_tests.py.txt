@@ -1,0 +1,29 @@
+# Rename to .py in a temporary directory to run with genlayer-test.
+import hashlib
+import json
+
+CONTRACT = "contracts/SemanticSaga.py"
+
+def definition():
+    return json.dumps([
+        {"id":"a","depends_on":[],"success_criteria":"receipt proves a","compensation_criteria":"receipt proves undo a"},
+        {"id":"b","depends_on":["a"],"success_criteria":"receipt proves b","compensation_criteria":"receipt proves undo b"}
+    ])
+
+def test_dependency_lock(direct_vm, direct_deploy, direct_alice):
+    c = direct_deploy(CONTRACT)
+    direct_vm.sender = direct_alice
+    c.register_template("t", "Template", definition())
+    c.start_workflow("w", "t", hashlib.sha256(b"context").hexdigest())
+    with direct_vm.expect_revert("dependency incomplete"):
+        c.claim_step("w", "b")
+
+def test_cycle_rejected(direct_vm, direct_deploy, direct_alice):
+    c = direct_deploy(CONTRACT)
+    direct_vm.sender = direct_alice
+    cyclic = json.dumps([
+        {"id":"a","depends_on":["b"],"success_criteria":"a","compensation_criteria":"undo"},
+        {"id":"b","depends_on":["a"],"success_criteria":"b","compensation_criteria":"undo"}
+    ])
+    with direct_vm.expect_revert("cycle"):
+        c.register_template("bad", "Bad", cyclic)
