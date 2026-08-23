@@ -9,7 +9,7 @@ MAX_URL = 512
 MAX_TEXT = 1800
 MAX_RECEIPT = 16000
 MAX_STEPS = 12
-POLICY_VERSION = "semanticsaga-v1-exact-receipt"
+POLICY_VERSION = "semanticsaga-v2-complete-compensation"
 
 
 @allow_storage
@@ -199,7 +199,9 @@ class SemanticSaga(gl.Contract):
             queue.pop(0)
             workflow.compensation_queue_json = json.dumps(queue, separators=(",", ":"))
             if len(queue) == 0:
-                workflow.state = "ROLLED_BACK"
+                completed = json.loads(workflow.completed_order_json)
+                workflow.state = "ROLLED_BACK" if self._all_compensated(
+                    wid, completed) else "FAILED_UNCOMPENSATED"
         elif record["verdict"] == "FAIL":
             current.state = "COMPENSATION_FAILED"
             workflow.state = "FAILED_UNCOMPENSATED"
@@ -325,9 +327,9 @@ Workflow: {wid}\nStep: {sid}\nAction: {action}\nCriteria: {criteria}
                 normalized_deps.append(did)
             success = self._required(str(item.get("success_criteria", "")),
                 "success criteria", MAX_TEXT)
-            compensation = str(item.get("compensation_criteria", "")).strip()
-            if len(compensation) > MAX_TEXT:
-                raise gl.vm.UserError("EXPECTED: compensation criteria too long")
+            compensation = self._required(
+                str(item.get("compensation_criteria", "")),
+                "compensation criteria", MAX_TEXT)
             clean.append({"id": sid, "depends_on": normalized_deps,
                 "success_criteria": success,
                 "compensation_criteria": " ".join(compensation.split())})
@@ -357,12 +359,20 @@ Workflow: {wid}\nStep: {sid}\nAction: {action}\nCriteria: {criteria}
 
     def _compensation_queue(self, tid: str, completed) -> list:
         definitions = json.loads(self.templates[tid].steps_json)
-        compensable = []
+        queue = []
         for sid in reversed(completed):
             for item in definitions:
-                if item["id"] == sid and len(item["compensation_criteria"]) > 0:
-                    compensable.append(sid)
-        return compensable
+                if item["id"] == sid:
+                    queue.append(sid)
+        return queue
+
+    def _all_compensated(self, wid: str, completed) -> bool:
+        for sid in completed:
+            state = self.steps.get(
+                self._step_key(wid, sid), self._empty_step()).state
+            if state != "COMPENSATED":
+                return False
+        return len(completed) > 0
 
     def _step_definition(self, tid: str, sid: str):
         for item in json.loads(self.templates[tid].steps_json):

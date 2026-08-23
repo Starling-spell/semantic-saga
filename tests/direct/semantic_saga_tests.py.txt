@@ -27,3 +27,13 @@ def test_cycle_rejected(direct_vm, direct_deploy, direct_alice):
     ])
     with direct_vm.expect_revert("cycle"):
         c.register_template("bad", "Bad", cyclic)
+
+def test_non_compensable_step_rejected(direct_vm, direct_deploy, direct_alice):
+    c = direct_deploy(CONTRACT)
+    direct_vm.sender = direct_alice
+    unsafe = json.dumps([{
+        "id":"effect", "depends_on":[], "success_criteria":"effect happened",
+        "compensation_criteria":""
+    }])
+    with direct_vm.expect_revert("invalid compensation criteria"):
+        c.register_template("unsafe", "Unsafe", unsafe)

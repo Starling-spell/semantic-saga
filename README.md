@@ -27,9 +27,9 @@ effects cannot be atomically reverted.
 ## State machine
 
 `RUNNING -> COMPLETED` or `RUNNING -> COMPENSATING -> ROLLED_BACK`.
-Irreversible completed steps are recorded but omitted from the reverse queue;
-if no completed effect is compensable, failure terminates as
-`FAILED_UNCOMPENSATED`.
+Every step must declare compensation criteria. `ROLLED_BACK` is reached only
+after every completed step has a consensus-verified `COMPENSATED` state.
+No completed external effect can be omitted from the reverse queue.
 
 ## Validation
 

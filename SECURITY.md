@@ -8,6 +8,9 @@
 - A verified failure freezes all forward claims immediately.
 - Only the reverse queue head can be compensated.
 - Free-form reasoning, confidence and summaries are excluded from state.
+- Templates reject steps without compensation criteria.
+- Queue exhaustion is not sufficient for `ROLLED_BACK`; every completed step
+  must independently have the stored `COMPENSATED` state.
 
 Use durable, public, append-only or content-addressed receipt URLs where
 possible. Authenticated and private endpoints are intentionally unsupported.
